@@ -33,7 +33,7 @@ namespace Moneybox.App.Features
             }
             catch(Exception ex)
             {
-                //log ex & handle this
+                //log ex & handle this.
             }
         }
     }
