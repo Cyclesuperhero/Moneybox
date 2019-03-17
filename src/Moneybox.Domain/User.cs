@@ -1,6 +1,7 @@
 ﻿using System;
 
-namespace Moneybox.App
+namespace Moneybox.Domain
+
 {
     public class User
     {

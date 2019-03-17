@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Moneybox.Services\Moneybox.Services.csproj" />
+    <ProjectReference Include="..\Moneybox.Domain\Moneybox.Domain.csproj" />
   </ItemGroup>
 
 </Project>

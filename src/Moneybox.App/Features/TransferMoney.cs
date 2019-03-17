@@ -1,55 +1,59 @@
-﻿using Moneybox.App.DataAccess;
-using Moneybox.App.Domain.Services;
+﻿using Moneybox.Domain;
+using Moneybox.Services;
 using System;
+using System.Transactions;
 
 namespace Moneybox.App.Features
 {
     public class TransferMoney
     {
-        private IAccountRepository accountRepository;
-        private INotificationService notificationService;
+        private IAccountService _accountService;
+        
+        private IAccountMessenger _accountMessenger;
 
-        public TransferMoney(IAccountRepository accountRepository, INotificationService notificationService)
+        public TransferMoney(IAccountService accountService, IAccountMessenger accountMessenger)
         {
-            this.accountRepository = accountRepository;
-            this.notificationService = notificationService;
+            this._accountService = accountService;          
+            _accountMessenger = accountMessenger;
+            
         }
 
         public void Execute(Guid fromAccountId, Guid toAccountId, decimal amount)
         {
-            var from = this.accountRepository.GetAccountById(fromAccountId);
-            var to = this.accountRepository.GetAccountById(toAccountId);
 
-            var fromBalance = from.Balance - amount;
-            if (fromBalance < 0m)
+            try
             {
-                throw new InvalidOperationException("Insufficient funds to make transfer");
-            }
+                Account fromAccount = this._accountService.AccountRepository.GetAccountById(fromAccountId);
+                Account toAccount = this._accountService.AccountRepository.GetAccountById(toAccountId);
 
-            if (fromBalance < 500m)
+                //subscribe events
+                fromAccount.LowFundsReached += _accountMessenger.OnLowFundsReached;
+                toAccount.PayinLimitReached += _accountMessenger.OnAccountLimitApproaching;
+
+
+                using (TransactionScope scope = new TransactionScope())
+                {
+                    //need to make transfer atomic, can't pay in from one if other won't allow withdrawl
+                    //will rollback if fail
+                    fromAccount.SubtractMoney(amount);
+                    toAccount.AddMoney(amount);
+                    this._accountService.AccountRepository.Update(fromAccount);
+                    this._accountService.AccountRepository.Update(toAccount);
+                    scope.Complete();
+                }
+            }
+            catch(InsufficientTransferFundsException ex)
             {
-                this.notificationService.NotifyFundsLow(from.User.Email);
+                //log ex & handle this
             }
-
-            var paidIn = to.PaidIn + amount;
-            if (paidIn > Account.PayInLimit)
+            catch (AccountPayinLimitReachedException ex)
             {
-                throw new InvalidOperationException("Account pay in limit reached");
+                //log ex & handle this
             }
-
-            if (Account.PayInLimit - paidIn < 500m)
+            catch (Exception ex)
             {
-                this.notificationService.NotifyApproachingPayInLimit(to.User.Email);
+                //log ex & handle this
             }
-
-            from.Balance = from.Balance - amount;
-            from.Withdrawn = from.Withdrawn - amount;
-
-            to.Balance = to.Balance + amount;
-            to.PaidIn = to.PaidIn + amount;
-
-            this.accountRepository.Update(from);
-            this.accountRepository.Update(to);
         }
     }
 }
